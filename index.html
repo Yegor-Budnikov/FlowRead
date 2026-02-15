@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FlowRead — RSVP Book Reader</title>
+<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,300;0,7..72,400;0,7..72,600;1,7..72,400&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.0/babel.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0b0b0f;
+  --bg-raised: #141419;
+  --bg-surface: #1a1a22;
+  --text: #ddd8cc;
+  --text-dim: rgba(221,216,204,0.35);
+  --text-mid: rgba(221,216,204,0.6);
+  --accent: #c49a6c;
+  --accent-soft: rgba(196,154,108,0.15);
+  --accent-glow: rgba(196,154,108,0.25);
+  --blue: #6c9cc4;
+  --green: #7cba6c;
+  --font-read: 'Literata', Georgia, serif;
+  --font-ui: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+html, body { 
+  height: 100%; 
+  background: var(--bg); 
+  color: var(--text); 
+  font-family: var(--font-ui);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { height: 100%; }
+
+/* Library Screen */
+.library-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  gap: 1.5rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.library-screen.library-empty {
+  justify-content: center;
+}
+
+.library-header {
+  text-align: center;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.upload-logo {
+  font-family: var(--font-read);
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.upload-logo span { color: var(--accent); }
+
+.upload-tagline {
+  color: var(--text-mid);
+  font-size: 0.95rem;
+  font-weight: 300;
+  text-align: center;
+  max-width: 360px;
+  line-height: 1.6;
+  margin-top: 0.75rem;
+}
+
+.library-books {
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.library-book-item {
+  background: var(--bg-raised);
+  border: 1px solid rgba(221,216,204,0.06);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.library-book-item:hover { border-color: var(--accent); background: var(--bg-surface); }
+.library-book-item:active { transform: scale(0.99); }
+
+.library-book-info { flex: 1; min-width: 0; }
+
+.library-book-title {
+  font-family: var(--font-read);
+  font-size: 1rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.2rem;
+}
+.library-book-author {
+  color: var(--text-mid);
+  font-size: 0.8rem;
+  font-weight: 300;
+  margin-bottom: 0.3rem;
+}
+.library-book-meta {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+}
+.library-book-progress-bar {
+  height: 3px;
+  background: rgba(221,216,204,0.06);
+  border-radius: 2px;
+  margin-top: 0.5rem;
+  overflow: hidden;
+}
+.library-book-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+.library-book-delete {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s;
+}
+.library-book-item:hover .library-book-delete { opacity: 1; }
+.library-book-delete:hover { color: #c46c6c; }
+
+.library-footer {
+  flex-shrink: 0;
+  padding: 0.5rem;
+}
+
+.drop-zone {
+  width: min(420px, 90vw);
+  height: 200px;
+  border: 2px dashed rgba(221,216,204,0.15);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--bg-raised);
+  flex-shrink: 0;
+}
+.drop-zone.drop-zone-compact {
+  height: auto;
+  padding: 1rem 2rem;
+  border-radius: 12px;
+  gap: 0;
+  width: min(480px, 100%);
+}
+.drop-zone.drop-zone-compact .drop-zone-text {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--accent);
+  background: rgba(196,154,108,0.05);
+}
+.drop-zone-icon { font-size: 2.5rem; opacity: 0.5; }
+.drop-zone-text { color: var(--text-mid); font-size: 0.9rem; }
+.drop-zone-hint { color: var(--text-dim); font-size: 0.75rem; }
+.drop-zone input { display: none; }
+
+.loading-msg {
+  color: var(--accent);
+  font-size: 0.95rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.error-msg { color: #c46c6c; font-size: 0.9rem; text-align: center; max-width: 400px; }
+
+/* TOC Screen */
+.toc-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.toc-header {
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid rgba(221,216,204,0.06);
+  flex-shrink: 0;
+}
+.toc-header-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.toc-header-titles { flex: 1; min-width: 0; }
+.toc-book-title {
+  font-family: var(--font-read);
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toc-book-author {
+  color: var(--text-mid);
+  font-size: 0.85rem;
+  font-weight: 300;
+}
+.toc-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+.toc-item {
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(221,216,204,0.04);
+  gap: 1rem;
+}
+.toc-item:hover { background: var(--bg-surface); }
+.toc-item.toc-done { opacity: 0.55; }
+.toc-item-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.toc-item-title {
+  font-family: var(--font-read);
+  font-size: 1rem;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toc-item-words {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+.toc-item-progress {
+  flex-shrink: 0;
+  width: 2.5rem;
+  text-align: right;
+}
+.toc-check {
+  color: var(--accent);
+  font-size: 1rem;
+}
+.toc-pct {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+.toc-footer {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  border-top: 1px solid rgba(221,216,204,0.06);
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.feedback-link {
+  color: var(--text-mid);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  text-decoration: none;
+  transition: color 0.2s;
+  cursor: pointer;
+}
+.feedback-link:hover { color: var(--accent); }
+.export-btn {
+  background: none;
+  border: 1px solid rgba(221,216,204,0.1);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.export-btn:hover { border-color: var(--accent); color: var(--text-mid); }
+
+/* Mobile: always show delete button */
+@media (hover: none) {
+  .library-book-delete { opacity: 0.5; }
+}
+
+/* Reader Screen */
+.reader-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.reader-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid rgba(221,216,204,0.06);
+  flex-shrink: 0;
+  z-index: 10;
+}
+.reader-top-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.btn-back {
+  background: none;
+  border: none;
+  color: var(--text-mid);
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0.25rem;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+.btn-back:hover { color: var(--accent); }
+.reader-chapter-name {
+  font-size: 0.8rem;
+  color: var(--text-mid);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reader-top-right { display: flex; align-items: center; gap: 0.5rem; }
+
+.mode-toggle {
+  background: var(--bg-surface);
+  border: 1px solid rgba(221,216,204,0.1);
+  border-radius: 8px;
+  display: flex;
+  overflow: hidden;
+}
+.mode-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-family: var(--font-ui);
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.mode-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.progress-bar-container {
+  height: 2px;
+  background: rgba(221,216,204,0.06);
+  flex-shrink: 0;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+/* RSVP View */
+.rsvp-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  padding: 2rem;
+  position: relative;
+}
+
+.rsvp-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.rsvp-marker-top, .rsvp-marker-bottom {
+  width: 2px;
+  height: 10px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+.rsvp-word-container {
+  display: flex;
+  align-items: baseline;
+  font-family: var(--font-read);
+  font-size: clamp(1.8rem, 7vw, 3.5rem);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  padding: 0.5rem 0;
+}
+
+.rsvp-before {
+  display: inline-block;
+  text-align: right;
+  width: 45vw;
+  overflow: hidden;
+  color: var(--text);
+}
+.rsvp-orp {
+  color: var(--accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.rsvp-after {
+  display: inline-block;
+  text-align: left;
+  width: 45vw;
+  overflow: hidden;
+  color: var(--text);
+}
+
+.rsvp-idle-hint {
+  position: absolute;
+  bottom: 20%;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 300;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Page Focus View */
+.page-focus-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem clamp(1.5rem, 8vw, 6rem);
+  cursor: pointer;
+  user-select: none;
+  scroll-behavior: smooth;
+}
+
+.pf-paragraph {
+  font-family: var(--font-read);
+  font-size: clamp(1rem, 3vw, 1.2rem);
+  line-height: 1.8;
+  margin-bottom: 1.2em;
+  color: var(--text-dim);
+  transition: color 0.3s;
+}
+.pf-paragraph.pf-active { color: var(--text-mid); }
+.pf-paragraph.pf-heading {
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
+  font-weight: 600;
+  margin-top: 1.5em;
+  line-height: 1.4;
+}
+
+.pf-word {
+  transition: all 0.15s ease;
+  border-radius: 3px;
+  padding: 1px 0;
+}
+.pf-word-active {
+  color: var(--text) !important;
+  background: var(--accent-soft);
+  padding: 1px 3px;
+  margin: 0 -3px;
+}
+.pf-word-active .pf-orp {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Controls */
+.controls-bar {
+  padding: 0.75rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 1px solid rgba(221,216,204,0.06);
+  background: var(--bg);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.controls-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.ctrl-btn {
+  background: none;
+  border: none;
+  color: var(--text-mid);
+  cursor: pointer;
+  font-size: 1.3rem;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+}
+.ctrl-btn:hover { color: var(--text); background: var(--bg-surface); }
+
+.ctrl-btn-play {
+  width: 56px;
+  height: 56px;
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 50%;
+  font-size: 1.4rem;
+}
+.ctrl-btn-play:hover { 
+  background: #d4aa7c; 
+  color: var(--bg);
+}
+
+.wpm-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.wpm-btn {
+  background: var(--bg-surface);
+  border: 1px solid rgba(221,216,204,0.08);
+  color: var(--text-mid);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.wpm-btn:hover { border-color: var(--accent); color: var(--accent); }
+.wpm-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 70px;
+  text-align: center;
+}
+
+/* Break Screen */
+.break-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  z-index: 20;
+  padding: 2rem;
+  animation: fadeIn 0.5s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.break-icon { font-size: 2.5rem; }
+.break-message {
+  font-family: var(--font-read);
+  font-size: 1.3rem;
+  font-weight: 300;
+  text-align: center;
+  line-height: 1.6;
+  max-width: 320px;
+}
+.break-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.break-stat {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-mid);
+}
+.break-stat strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+.break-continue {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.85rem 2.5rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 1rem;
+}
+.break-continue:hover { background: #d4aa7c; transform: scale(1.02); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(221,216,204,0.1); border-radius: 4px; }
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .controls-bar { padding: 0.5rem 1rem 1rem; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ==================== UTILITIES ====================
+
+function getORPIndex(word) {
+  let start = 0;
+  while (start < word.length && !/[\p{L}\p{N}]/u.test(word[start])) start++;
+  let count = 0;
+  for (let i = start; i < word.length; i++) {
+    if (/[\p{L}\p{N}]/u.test(word[i])) count++;
+  }
+  let target;
+  if (count <= 1) target = 0;
+  else if (count <= 3) target = 0;
+  else if (count <= 5) target = 1;
+  else if (count <= 8) target = 2;
+  else if (count <= 13) target = 3;
+  else target = 4;
+
+  let seen = 0;
+  for (let i = start; i < word.length; i++) {
+    if (/[\p{L}\p{N}]/u.test(word[i])) {
+      if (seen === target) return i;
+      seen++;
+    }
+  }
+  return start;
+}
+
+function getWordDelay(word, baseDelay) {
+  let d = baseDelay;
+  const letters = (word.match(/[\p{L}\p{N}]/gu) || []).length;
+  if (letters >= 9) d *= 1.6;
+  else if (letters >= 7) d *= 1.3;
+  if (/[,;:–—][\p{Pe}"'»)]*$/u.test(word)) d *= 1.4;
+  else if (/[.!?…][\p{Pe}"'»)]*$/u.test(word)) d *= 2.0;
+  return d;
+}
+
+function extractContent(htmlString) {
+  const doc = new DOMParser().parseFromString(htmlString, 'text/html');
+  const body = doc.body;
+  if (!body) return { paragraphs: [], allWords: [] };
+
+  const paragraphs = [];
+  let gi = 0;
+
+  const blocks = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6');
+  const elements = blocks.length > 0 ? blocks : doc.querySelectorAll('div');
+
+  if (elements.length === 0) {
+    const text = body.textContent.trim();
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length) paragraphs.push({ words, startIndex: 0, isHeading: false });
+    return { paragraphs, allWords: words };
+  }
+
+  elements.forEach(el => {
+    const text = el.textContent.trim();
+    if (!text) return;
+    const words = text.split(/\s+/).filter(Boolean);
+    if (!words.length) return;
+    paragraphs.push({ words, startIndex: gi, isHeading: /^H[1-6]$/.test(el.tagName) });
+    gi += words.length;
+  });
+
+  return { paragraphs, allWords: paragraphs.flatMap(p => p.words) };
+}
+
+async function parseEpub(file) {
+  const zip = await JSZip.loadAsync(file);
+  const containerXml = await zip.file('META-INF/container.xml')?.async('text');
+  if (!containerXml) throw new Error('Invalid epub: no container.xml');
+
+  const cDoc = new DOMParser().parseFromString(containerXml, 'text/xml');
+  const opfPath = cDoc.querySelector('rootfile')?.getAttribute('full-path');
+  if (!opfPath) throw new Error('Invalid epub: no OPF path');
+
+  const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+  const opfXml = await zip.file(opfPath)?.async('text');
+  if (!opfXml) throw new Error('Invalid epub: cannot read OPF');
+
+  const opf = new DOMParser().parseFromString(opfXml, 'text/xml');
+
+  const title = opf.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', 'title')[0]?.textContent
+    || opf.querySelector('title')?.textContent || 'Untitled';
+  const author = opf.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', 'creator')[0]?.textContent
+    || opf.querySelector('creator')?.textContent || '';
+
+  const manifest = {};
+  opf.querySelectorAll('manifest item').forEach(it => {
+    manifest[it.getAttribute('id')] = {
+      href: it.getAttribute('href'),
+      type: it.getAttribute('media-type')
+    };
+  });
+
+  // Build TOC label map: filename (without fragment) → label
+  const tocLabels = {};
+
+  // Try toc.ncx first
+  let tocItem = null;
+  for (const [id, item] of Object.entries(manifest)) {
+    if (item.type === 'application/x-dtbncx+xml') { tocItem = item; break; }
+  }
+  if (tocItem) {
+    const tocPath = opfDir + tocItem.href;
+    const tocFile = zip.file(tocPath) || zip.file(tocItem.href);
+    if (tocFile) {
+      const ncxXml = await tocFile.async('text');
+      const ncx = new DOMParser().parseFromString(ncxXml, 'text/xml');
+      ncx.querySelectorAll('navPoint').forEach(np => {
+        const label = np.querySelector('navLabel text')?.textContent?.trim();
+        const src = np.querySelector('content')?.getAttribute('src');
+        if (label && src) {
+          const cleanSrc = src.split('#')[0];
+          if (!tocLabels[cleanSrc]) tocLabels[cleanSrc] = label;
+        }
+      });
+    }
+  }
+
+  // Try nav.xhtml if ncx didn't yield results
+  if (Object.keys(tocLabels).length === 0) {
+    let navItem = null;
+    for (const [id, item] of Object.entries(manifest)) {
+      if (item.href && (item.href.includes('nav') || item.href.includes('toc')) && 
+          (item.type === 'application/xhtml+xml' || item.type === 'text/html')) {
+        navItem = item; break;
+      }
+    }
+    // Also check for properties="nav"
+    opf.querySelectorAll('manifest item').forEach(it => {
+      if (it.getAttribute('properties')?.includes('nav')) {
+        navItem = manifest[it.getAttribute('id')];
+      }
+    });
+
+    if (navItem) {
+      const navPath = opfDir + navItem.href;
+      const navFile = zip.file(navPath) || zip.file(navItem.href);
+      if (navFile) {
+        const navHtml = await navFile.async('text');
+        const navDoc = new DOMParser().parseFromString(navHtml, 'text/html');
+        // Prefer the TOC nav specifically
+        const tocNav = navDoc.querySelector('nav[epub\\:type="toc"], nav[role="doc-toc"]') 
+          || navDoc.querySelector('nav');
+        if (tocNav) {
+          tocNav.querySelectorAll('a').forEach(a => {
+            const href = a.getAttribute('href');
+            const label = a.textContent?.trim();
+            if (href && label) {
+              const cleanHref = href.split('#')[0];
+              if (!tocLabels[cleanHref]) tocLabels[cleanHref] = label;
+            }
+          });
+        }
+      }
+    }
+  }
+
+  const spineIds = [];
+  opf.querySelectorAll('spine itemref').forEach(ref => spineIds.push(ref.getAttribute('idref')));
+
+  const chapters = [];
+  let lastTocTitle = '';
+  let currentChapter = null;
+
+  for (const id of spineIds) {
+    const item = manifest[id];
+    if (!item) continue;
+    if (item.type !== 'application/xhtml+xml' && item.type !== 'text/html') continue;
+
+    let filePath = opfDir + decodeURIComponent(item.href);
+    let zf = zip.file(filePath);
+    if (!zf) {
+      zf = zip.file(item.href);
+    }
+    if (!zf) continue;
+
+    const html = await zf.async('text');
+    const content = extractContent(html);
+
+    if (content.allWords.length < 3) continue;
+
+    // Check if this file has its own TOC entry
+    let chTitle = tocLabels[item.href] || tocLabels[decodeURIComponent(item.href)] || '';
+    if (!chTitle) {
+      const filename = item.href.split('/').pop();
+      for (const [key, val] of Object.entries(tocLabels)) {
+        if (key.split('/').pop() === filename) { chTitle = val; break; }
+      }
+    }
+
+    let hasOwnTitle = !!chTitle;
+
+    if (!hasOwnTitle) {
+      const doc2 = new DOMParser().parseFromString(html, 'text/html');
+      const heading = doc2.querySelector('h1, h2, h3');
+      const hText = heading?.textContent?.trim() || '';
+      // Only count as own title if it's different from the book title
+      if (hText && hText.toLowerCase() !== title.toLowerCase()) {
+        chTitle = hText;
+        hasOwnTitle = true;
+      }
+    }
+
+    if (hasOwnTitle) {
+      // Start a new chapter
+      lastTocTitle = chTitle;
+      currentChapter = {
+        id, title: chTitle,
+        paragraphs: [...content.paragraphs],
+        words: [...content.allWords],
+        wordCount: content.allWords.length
+      };
+      chapters.push(currentChapter);
+    } else if (currentChapter) {
+      // Merge into current chapter: shift paragraph startIndexes
+      const offset = currentChapter.words.length;
+      const shifted = content.paragraphs.map(p => ({
+        ...p, startIndex: p.startIndex + offset
+      }));
+      currentChapter.paragraphs.push(...shifted);
+      currentChapter.words.push(...content.allWords);
+      currentChapter.wordCount = currentChapter.words.length;
+    } else {
+      // No current chapter yet — create one
+      chTitle = 'Chapter ' + (chapters.length + 1);
+      currentChapter = {
+        id, title: chTitle,
+        paragraphs: [...content.paragraphs],
+        words: [...content.allWords],
+        wordCount: content.allWords.length
+      };
+      chapters.push(currentChapter);
+    }
+  }
+
+  if (chapters.length === 0) throw new Error('No readable chapters found');
+  return { title, author, chapters };
+}
+
+function findSentenceStart(words, fromIdx) {
+  let i = fromIdx - 1;
+  while (i > 0) {
+    if (/[.!?…][\p{Pe}"'»)]*$/u.test(words[i])) return i + 1;
+    i--;
+  }
+  return 0;
+}
+
+function goBackOneSentence(words, currentIdx) {
+  const curStart = findSentenceStart(words, currentIdx);
+  if (currentIdx > curStart + 2) return curStart;
+  if (curStart <= 0) return 0;
+  return findSentenceStart(words, curStart - 1);
+}
+
+function goForwardOneSentence(words, currentIdx) {
+  for (let i = currentIdx; i < words.length - 1; i++) {
+    if (/[.!?…][\p{Pe}"'»)]*$/u.test(words[i])) return Math.min(i + 1, words.length - 1);
+  }
+  return words.length - 1;
+}
+
+// ==================== PROGRESS PERSISTENCE ====================
+
+function getBookKey(book) {
+  const raw = (book.title + '|' + (book.author || '')).toLowerCase().replace(/\s+/g, '_');
+  // Simple hash to keep key short
+  let h = 0;
+  for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h + raw.charCodeAt(i)) | 0; }
+  return 'fr_' + Math.abs(h).toString(36);
+}
+
+function saveChapterProgress(bookKey, chapterIdx, wordIndex, totalWords) {
+  try {
+    const data = JSON.parse(localStorage.getItem(bookKey) || '{}');
+    data[chapterIdx] = { w: wordIndex, t: totalWords };
+    localStorage.setItem(bookKey, JSON.stringify(data));
+  } catch(e) {}
+}
+
+function loadChapterProgress(bookKey, chapterIdx) {
+  try {
+    const data = JSON.parse(localStorage.getItem(bookKey) || '{}');
+    return data[chapterIdx] || null;
+  } catch(e) { return null; }
+}
+
+function getChapterPercent(bookKey, chapterIdx, totalWords) {
+  const saved = loadChapterProgress(bookKey, chapterIdx);
+  if (!saved) return 0;
+  if (saved.w >= saved.t - 2) return 100;
+  return Math.round((saved.w / totalWords) * 100);
+}
+
+// ==================== INDEXEDDB BOOK STORAGE ====================
+
+function openBooksDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('flowread_books', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('books')) {
+        db.createObjectStore('books', { keyPath: 'bookKey' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveBookToDB(book) {
+  const db = await openBooksDB();
+  const bookKey = getBookKey(book);
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('books', 'readwrite');
+    tx.objectStore('books').put({
+      bookKey,
+      title: book.title,
+      author: book.author,
+      chapters: book.chapters,
+      savedAt: new Date().toISOString()
+    });
+    tx.oncomplete = () => resolve(bookKey);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadBookFromDB(bookKey) {
+  const db = await openBooksDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('books', 'readonly');
+    const req = tx.objectStore('books').get(bookKey);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getAllBooksMeta() {
+  const db = await openBooksDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('books', 'readonly');
+    const req = tx.objectStore('books').getAll();
+    req.onsuccess = () => {
+      const books = req.result.map(b => ({
+        bookKey: b.bookKey,
+        title: b.title,
+        author: b.author,
+        chapterCount: b.chapters.length,
+        totalWords: b.chapters.reduce((s, c) => s + c.wordCount, 0),
+        savedAt: b.savedAt
+      }));
+      resolve(books);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteBookFromDB(bookKey) {
+  const db = await openBooksDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('books', 'readwrite');
+    tx.objectStore('books').delete(bookKey);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function getBookOverallProgress(bookKey, chapters) {
+  let totalRead = 0, totalWords = 0;
+  chapters.forEach((ch, i) => {
+    totalWords += ch.wordCount;
+    const saved = loadChapterProgress(bookKey, i);
+    if (saved) {
+      if (saved.w >= saved.t - 2) totalRead += ch.wordCount;
+      else totalRead += saved.w;
+    }
+  });
+  return totalWords > 0 ? Math.round((totalRead / totalWords) * 100) : 0;
+}
+
+// ==================== ANALYTICS ====================
+
+const FEEDBACK_URL = 'https://forms.gle/SCPDiLxEjL9jA5WCA';
+const APP_VERSION = '0.1';
+
+function getOrCreateUserId() {
+  try {
+    let uid = localStorage.getItem('fr_uid');
+    if (!uid) {
+      uid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+      localStorage.setItem('fr_uid', uid);
+    }
+    return uid;
+  } catch(e) { return 'anon'; }
+}
+
+function track(type, data = {}) {
+  try {
+    const key = 'fr_events';
+    const events = JSON.parse(localStorage.getItem(key) || '[]');
+    events.push({
+      type,
+      timestamp: new Date().toISOString(),
+      data
+    });
+    localStorage.setItem(key, JSON.stringify(events));
+  } catch(e) {}
+}
+
+function exportAnalytics() {
+  try {
+    const payload = {
+      user_id: getOrCreateUserId(),
+      app_version: APP_VERSION,
+      exported_at: new Date().toISOString(),
+      events: JSON.parse(localStorage.getItem('fr_events') || '[]')
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flowread-analytics-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Не удалось экспортировать'); }
+}
+
+const BREAK_MESSAGES = [
+  { icon: '👁️', text: 'Поморгай! Дай глазам отдохнуть' },
+  { icon: '🌿', text: 'Посмотри вдаль на несколько секунд' },
+  { icon: '🫁', text: 'Сделай глубокий вдох и выдох' },
+  { icon: '💧', text: 'Хорошее время сделать глоток воды' },
+  { icon: '🙂', text: 'Маленький перерыв — и дальше' },
+];
+
+function formatTime(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return m > 0 ? `${m}:${String(sec).padStart(2,'0')}` : `${sec} сек`;
+}
+
+// ==================== COMPONENTS ====================
+
+function LibraryScreen({ onBookSelected }) {
+  const [books, setBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef(null);
+  const logoTapRef = useRef({ count: 0, timer: null });
+
+  // Load book list from IndexedDB
+  useEffect(() => {
+    getAllBooksMeta().then(b => { setBooks(b); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const handleFile = useCallback(async (file) => {
+    if (!file) return;
+    if (!file.name.endsWith('.epub')) {
+      setError('Пожалуйста, загрузите файл в формате .epub');
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const book = await parseEpub(file);
+      await saveBookToDB(book);
+      const bookKey = getBookKey(book);
+      onBookSelected(bookKey, book);
+    } catch (e) {
+      console.error(e);
+      setError('Не удалось прочитать файл: ' + e.message);
+      setUploading(false);
+    }
+  }, [onBookSelected]);
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFile(e.dataTransfer?.files?.[0]);
+  }, [handleFile]);
+
+  const handleOpenBook = useCallback(async (meta) => {
+    setLoading(true);
+    try {
+      const stored = await loadBookFromDB(meta.bookKey);
+      if (stored) {
+        onBookSelected(meta.bookKey, { title: stored.title, author: stored.author, chapters: stored.chapters });
+      }
+    } catch(e) {
+      setError('Не удалось загрузить книгу');
+    }
+    setLoading(false);
+  }, [onBookSelected]);
+
+  const handleDeleteBook = useCallback(async (e, bookKey) => {
+    e.stopPropagation();
+    if (confirm('Удалить книгу из библиотеки?')) {
+      await deleteBookFromDB(bookKey);
+      setBooks(prev => prev.filter(b => b.bookKey !== bookKey));
+    }
+  }, []);
+
+  // Triple-tap logo → export analytics
+  const handleLogoTap = useCallback(() => {
+    const ref = logoTapRef.current;
+    ref.count++;
+    if (ref.timer) clearTimeout(ref.timer);
+    if (ref.count >= 3) {
+      ref.count = 0;
+      exportAnalytics();
+      return;
+    }
+    ref.timer = setTimeout(() => { ref.count = 0; }, 600);
+  }, []);
+
+  const hasBooks = books.length > 0;
+
+  return React.createElement('div', { className: 'library-screen' + (hasBooks ? '' : ' library-empty') },
+    React.createElement('div', { className: 'library-header', onClick: handleLogoTap },
+      React.createElement('div', { className: 'upload-logo' },
+        'Flow', React.createElement('span', null, 'Read')
+      ),
+      !hasBooks && React.createElement('p', { className: 'upload-tagline' },
+        'Читай книги сфокусированно. Загрузи epub — и погружайся в поток.'
+      )
+    ),
+
+    // Book list
+    hasBooks && React.createElement('div', { className: 'library-books' },
+      books.map(meta => {
+        const pct = getBookOverallProgressFromMeta(meta.bookKey, meta.chapterCount);
+        return React.createElement('div', {
+          className: 'library-book-item',
+          key: meta.bookKey,
+          onClick: () => handleOpenBook(meta)
+        },
+          React.createElement('div', { className: 'library-book-info' },
+            React.createElement('div', { className: 'library-book-title' }, meta.title),
+            meta.author && React.createElement('div', { className: 'library-book-author' }, meta.author),
+            React.createElement('div', { className: 'library-book-meta' },
+              meta.chapterCount + ' гл. · ' + Math.round(meta.totalWords / 1000) + 'k слов' +
+              (pct > 0 ? ' · ' + pct + '%' : '')
+            ),
+            pct > 0 && React.createElement('div', { className: 'library-book-progress-bar' },
+              React.createElement('div', {
+                className: 'library-book-progress-fill',
+                style: { width: pct + '%' }
+              })
+            )
+          ),
+          React.createElement('button', {
+            className: 'library-book-delete',
+            onClick: (e) => handleDeleteBook(e, meta.bookKey),
+            title: 'Удалить'
+          }, '✕')
+        );
+      })
+    ),
+
+    // Upload zone
+    !uploading && React.createElement('div', {
+      className: 'drop-zone' + (hasBooks ? ' drop-zone-compact' : '') + (dragOver ? ' drag-over' : ''),
+      onClick: () => inputRef.current?.click(),
+      onDragOver: (e) => { e.preventDefault(); setDragOver(true); },
+      onDragLeave: () => setDragOver(false),
+      onDrop
+    },
+      !hasBooks && React.createElement('div', { className: 'drop-zone-icon' }, '📖'),
+      React.createElement('div', { className: 'drop-zone-text' },
+        hasBooks ? '+ Загрузить ещё книгу' : 'Перетащи .epub или нажми'
+      ),
+      !hasBooks && React.createElement('div', { className: 'drop-zone-hint' }, 'Файл обрабатывается локально в браузере'),
+      React.createElement('input', {
+        ref: inputRef, type: 'file', accept: '.epub',
+        onChange: (e) => handleFile(e.target.files?.[0])
+      })
+    ),
+
+    uploading && React.createElement('div', { className: 'loading-msg' }, 'Разбираю книгу…'),
+    loading && !uploading && books.length === 0 && React.createElement('div', { className: 'loading-msg' }, 'Загружаю библиотеку…'),
+    error && React.createElement('div', { className: 'error-msg' }, error),
+
+    // Footer with feedback
+    hasBooks && React.createElement('div', { className: 'library-footer' },
+      React.createElement('a', {
+        className: 'feedback-link',
+        href: FEEDBACK_URL, target: '_blank', rel: 'noopener',
+        onClick: () => track('feedback_click', { source: 'library' })
+      }, '💬 Оставить отзыв')
+    )
+  );
+}
+
+// Helper: get overall progress from localStorage (works without full chapter data)
+function getBookOverallProgressFromMeta(bookKey, chapterCount) {
+  try {
+    const data = JSON.parse(localStorage.getItem(bookKey) || '{}');
+    let read = 0, total = 0;
+    for (let i = 0; i < chapterCount; i++) {
+      const ch = data[i];
+      if (ch) {
+        total += ch.t;
+        read += (ch.w >= ch.t - 2) ? ch.t : ch.w;
+      }
+    }
+    return total > 0 ? Math.round((read / total) * 100) : 0;
+  } catch(e) { return 0; }
+}
+
+function TOCScreen({ book, bookKey, onSelectChapter, onBackToLibrary }) {
+  return React.createElement('div', { className: 'toc-screen' },
+    React.createElement('div', { className: 'toc-header' },
+      React.createElement('div', { className: 'toc-header-top' },
+        React.createElement('button', { className: 'btn-back', onClick: onBackToLibrary, title: 'К библиотеке' }, '←'),
+        React.createElement('div', { className: 'toc-header-titles' },
+          React.createElement('div', { className: 'toc-book-title' }, book.title),
+          book.author && React.createElement('div', { className: 'toc-book-author' }, book.author)
+        )
+      )
+    ),
+    React.createElement('div', { className: 'toc-list' },
+      book.chapters.map((ch, i) => {
+        const pct = getChapterPercent(bookKey, i, ch.wordCount);
+        return React.createElement('div', {
+          className: 'toc-item' + (pct === 100 ? ' toc-done' : pct > 0 ? ' toc-started' : ''),
+          key: i,
+          onClick: () => onSelectChapter(i)
+        },
+          React.createElement('div', { className: 'toc-item-left' },
+            React.createElement('span', { className: 'toc-item-title' }, ch.title),
+            React.createElement('span', { className: 'toc-item-words' },
+              ch.wordCount + ' ' + (ch.wordCount > 4 ? 'слов' : 'слова')
+            )
+          ),
+          React.createElement('div', { className: 'toc-item-progress' },
+            pct === 100
+              ? React.createElement('span', { className: 'toc-check' }, '✓')
+              : pct > 0
+                ? React.createElement('span', { className: 'toc-pct' }, pct + '%')
+                : null
+          )
+        );
+      })
+    ),
+    React.createElement('div', { className: 'toc-footer' },
+      React.createElement('a', {
+        className: 'feedback-link',
+        href: FEEDBACK_URL, target: '_blank', rel: 'noopener',
+        onClick: () => track('feedback_click', { source: 'toc' })
+      }, '💬 Оставить отзыв')
+    )
+  );
+}
+
+function RSVPView({ word, isPlaying, onClick }) {
+  if (!word) {
+    return React.createElement('div', { className: 'rsvp-area', onClick },
+      React.createElement('div', { className: 'rsvp-idle-hint' }, 'Нажми ▶ или пробел')
+    );
+  }
+
+  const orpIdx = getORPIndex(word);
+  const before = word.slice(0, orpIdx);
+  const orp = word[orpIdx] || '';
+  const after = word.slice(orpIdx + 1);
+
+  return React.createElement('div', { className: 'rsvp-area', onClick },
+    React.createElement('div', { className: 'rsvp-reticle' },
+      React.createElement('div', { className: 'rsvp-marker-top' }),
+      React.createElement('div', { className: 'rsvp-word-container' },
+        React.createElement('span', { className: 'rsvp-before' }, before),
+        React.createElement('span', { className: 'rsvp-orp' }, orp),
+        React.createElement('span', { className: 'rsvp-after' }, after)
+      ),
+      React.createElement('div', { className: 'rsvp-marker-bottom' })
+    )
+  );
+}
+
+function PageFocusView({ paragraphs, currentWordIndex, isPlaying, onClick }) {
+  const activeWordRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (activeWordRef.current && containerRef.current) {
+      const el = activeWordRef.current;
+      const container = containerRef.current;
+      const elRect = el.getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
+      const offset = elRect.top - cRect.top - cRect.height / 3;
+      if (Math.abs(offset) > 80) {
+        container.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }, [currentWordIndex]);
+
+  return React.createElement('div', {
+    className: 'page-focus-area', ref: containerRef, onClick
+  },
+    paragraphs.map((para, pi) => {
+      const paraEnd = para.startIndex + para.words.length;
+      const isActive = currentWordIndex >= para.startIndex && currentWordIndex < paraEnd;
+
+      return React.createElement('p', {
+        key: pi,
+        className: 'pf-paragraph' +
+          (isActive ? ' pf-active' : '') +
+          (para.isHeading ? ' pf-heading' : '')
+      },
+        para.words.map((w, wi) => {
+          const globalIdx = para.startIndex + wi;
+          const isCurrent = globalIdx === currentWordIndex;
+
+          if (isCurrent) {
+            const orpIdx = getORPIndex(w);
+            const before = w.slice(0, orpIdx);
+            const orp = w[orpIdx] || '';
+            const after = w.slice(orpIdx + 1);
+            return React.createElement('span', {
+              key: wi, ref: activeWordRef,
+              className: 'pf-word pf-word-active'
+            },
+              before,
+              React.createElement('span', { className: 'pf-orp' }, orp),
+              after,
+              ' '
+            );
+          }
+
+          return React.createElement('span', { key: wi, className: 'pf-word' }, w + ' ');
+        })
+      );
+    })
+  );
+}
+
+function BreakScreen({ wordsRead, elapsed, wpm, chapterProgress, onContinue }) {
+  const msg = BREAK_MESSAGES[Math.floor(Math.random() * BREAK_MESSAGES.length)];
+  const actualWpm = elapsed > 0 ? Math.round(wordsRead / (elapsed / 60000)) : wpm;
+  const breakStartRef = useRef(Date.now());
+
+  useEffect(() => {
+    track('break_shown', { words_read_since_last_break: wordsRead });
+    breakStartRef.current = Date.now();
+  }, []);
+
+  const handleContinue = () => {
+    track('break_action', { action: 'continue', break_duration_sec: Math.round((Date.now() - breakStartRef.current) / 1000) });
+    onContinue();
+  };
+
+  return React.createElement('div', { className: 'break-overlay' },
+    React.createElement('div', { className: 'break-icon' }, msg.icon),
+    React.createElement('div', { className: 'break-message' }, msg.text),
+    React.createElement('div', { className: 'break-stats' },
+      React.createElement('div', { className: 'break-stat' },
+        'Прочитано ', React.createElement('strong', null, wordsRead),
+        ' слов за ', React.createElement('strong', null, formatTime(elapsed))
+      ),
+      React.createElement('div', { className: 'break-stat' },
+        'Скорость: ', React.createElement('strong', null, actualWpm + ' WPM')
+      ),
+      React.createElement('div', { className: 'break-stat' },
+        'Глава: ', React.createElement('strong', null, Math.round(chapterProgress * 100) + '%')
+      )
+    ),
+    React.createElement('button', { className: 'break-continue', onClick: handleContinue },
+      'Продолжить чтение'
+    ),
+    React.createElement('a', {
+      className: 'feedback-link',
+      href: FEEDBACK_URL, target: '_blank', rel: 'noopener',
+      onClick: () => track('feedback_click', { source: 'break' })
+    }, '💬 Оставить отзыв')
+  );
+}
+
+function ReaderScreen({ book, bookKey, chapterIndex, onBackToTOC }) {
+  const chapter = book.chapters[chapterIndex];
+  
+  // Load saved position (minus one sentence)
+  const getInitialWordIndex = () => {
+    const saved = loadChapterProgress(bookKey, chapterIndex);
+    if (!saved || saved.w <= 0) return 0;
+    // If chapter was completed, start from beginning
+    if (saved.w >= saved.t - 2) return 0;
+    // Go back one sentence from saved position
+    return goBackOneSentence(chapter.words, saved.w);
+  };
+  
+  const initialIdx = getInitialWordIndex();
+  const [wordIndex, setWordIndex] = useState(initialIdx);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [wpm, setWpm] = useState(250);
+  const [mode, setMode] = useState(initialIdx > 0 ? 'page' : 'rsvp'); // 'rsvp' | 'page'
+  const [showBreak, setShowBreak] = useState(false);
+  const wordsReadBlockRef = useRef(0);
+  const [wordsReadBlock, setWordsReadBlock] = useState(0);
+  const [blockStartTime, setBlockStartTime] = useState(Date.now());
+  const breakInterval = 1000;
+  const saveTimerRef = useRef(null);
+  const readingStartTimeRef = useRef(Date.now());
+  const totalWordsReadRef = useRef(0);
+
+  // Track reading_start on mount
+  useEffect(() => {
+    readingStartTimeRef.current = Date.now();
+    track('reading_start', { chapter_index: chapterIndex, chapter_title: chapter.title, wpm_setting: 250, resumed_from: initialIdx });
+  }, []);
+
+  // Save progress debounced (every 2 seconds of change)
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveChapterProgress(bookKey, chapterIndex, wordIndex, chapter.words.length);
+    }, 2000);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [wordIndex, bookKey, chapterIndex, chapter.words.length]);
+
+  // Save on unmount / back to TOC
+  const handleBackToTOC = useCallback(() => {
+    saveChapterProgress(bookKey, chapterIndex, wordIndex, chapter.words.length);
+    track('reading_end', {
+      chapter_index: chapterIndex,
+      words_read: wordIndex,
+      time_reading_sec: Math.round((Date.now() - readingStartTimeRef.current) / 1000),
+      reason: wordIndex >= chapter.words.length - 2 ? 'finished' : 'exited'
+    });
+    onBackToTOC();
+  }, [bookKey, chapterIndex, wordIndex, chapter.words.length, onBackToTOC]);
+
+  // RSVP playback
+  useEffect(() => {
+    if (!isPlaying || showBreak) return;
+    if (wordIndex >= chapter.words.length - 1) {
+      setIsPlaying(false);
+      saveChapterProgress(bookKey, chapterIndex, chapter.words.length - 1, chapter.words.length);
+      return;
+    }
+
+    const word = chapter.words[wordIndex];
+    const baseDelay = 60000 / wpm;
+    const delay = getWordDelay(word, baseDelay);
+
+    const timeout = setTimeout(() => {
+      wordsReadBlockRef.current += 1;
+      setWordsReadBlock(wordsReadBlockRef.current);
+      if (wordsReadBlockRef.current >= breakInterval) {
+        setShowBreak(true);
+        setIsPlaying(false);
+        return;
+      }
+      setWordIndex(prev => prev + 1);
+    }, delay);
+
+    return () => clearTimeout(timeout);
+  }, [isPlaying, wordIndex, wpm, showBreak, chapter.words.length]);
+
+  const handleContinueBreak = useCallback(() => {
+    setShowBreak(false);
+    wordsReadBlockRef.current = 0;
+    setWordsReadBlock(0);
+    setBlockStartTime(Date.now());
+    setIsPlaying(true);
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    if (showBreak) {
+      handleContinueBreak();
+    } else {
+      setIsPlaying(p => {
+        if (p) {
+          track('reading_pause', { words_read: wordIndex, current_wpm: wpm, time_reading_sec: Math.round((Date.now() - readingStartTimeRef.current) / 1000) });
+        } else {
+          track('reading_resume', { words_read: wordIndex, current_wpm: wpm });
+        }
+        return !p;
+      });
+    }
+  }, [showBreak, handleContinueBreak, wordIndex, wpm]);
+
+  const handleBack = useCallback(() => {
+    track('go_back', { words_read: wordIndex, current_wpm: wpm });
+    const newIdx = goBackOneSentence(chapter.words, wordIndex);
+    setWordIndex(newIdx);
+    setMode('page');
+    setIsPlaying(false);
+  }, [chapter.words, wordIndex, wpm]);
+
+  const handleForward = useCallback(() => {
+    const newIdx = goForwardOneSentence(chapter.words, wordIndex);
+    setWordIndex(newIdx);
+  }, [chapter.words, wordIndex]);
+
+  // Keyboard controls
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (showBreak) {
+          handleContinueBreak();
+        } else {
+          togglePlay();
+        }
+      }
+      if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        handleBack();
+      }
+      if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        handleForward();
+      }
+      if (e.code === 'ArrowUp') {
+        e.preventDefault();
+        setWpm(w => { const nw = Math.min(w + 25, 800); if (nw !== w) track('wpm_change', { old_wpm: w, new_wpm: nw, words_read: wordIndex }); return nw; });
+      }
+      if (e.code === 'ArrowDown') {
+        e.preventDefault();
+        setWpm(w => { const nw = Math.max(w - 25, 100); if (nw !== w) track('wpm_change', { old_wpm: w, new_wpm: nw, words_read: wordIndex }); return nw; });
+      }
+      if (e.code === 'KeyM' || e.code === 'Tab') {
+        e.preventDefault();
+        setMode(m => m === 'rsvp' ? 'page' : 'rsvp');
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [wordIndex, showBreak, togglePlay, handleBack, handleForward, handleContinueBreak]);
+
+  const progress = chapter.words.length > 0 ? wordIndex / chapter.words.length : 0;
+  const currentWord = chapter.words[wordIndex] || '';
+
+  return React.createElement('div', { className: 'reader-screen' },
+    // Top bar
+    React.createElement('div', { className: 'reader-top-bar' },
+      React.createElement('div', { className: 'reader-top-left' },
+        React.createElement('button', { className: 'btn-back', onClick: handleBackToTOC, title: 'К оглавлению' }, '←'),
+        React.createElement('span', { className: 'reader-chapter-name' }, chapter.title)
+      ),
+      React.createElement('div', { className: 'reader-top-right' },
+        React.createElement('div', { className: 'mode-toggle' },
+          React.createElement('button', {
+            className: 'mode-btn' + (mode === 'rsvp' ? ' active' : ''),
+            onClick: () => setMode('rsvp')
+          }, 'RSVP'),
+          React.createElement('button', {
+            className: 'mode-btn' + (mode === 'page' ? ' active' : ''),
+            onClick: () => setMode('page')
+          }, 'Страница')
+        )
+      )
+    ),
+
+    // Progress bar
+    React.createElement('div', { className: 'progress-bar-container' },
+      React.createElement('div', {
+        className: 'progress-bar-fill',
+        style: { width: (progress * 100) + '%' }
+      })
+    ),
+
+    // Reading area
+    mode === 'rsvp'
+      ? React.createElement(RSVPView, {
+          word: (isPlaying || wordIndex > 0) ? currentWord : null,
+          isPlaying,
+          onClick: togglePlay
+        })
+      : React.createElement(PageFocusView, {
+          paragraphs: chapter.paragraphs,
+          currentWordIndex: wordIndex,
+          isPlaying,
+          onClick: togglePlay
+        }),
+
+    // Break overlay
+    showBreak && React.createElement(BreakScreen, {
+      wordsRead: wordsReadBlock,
+      elapsed: Date.now() - blockStartTime,
+      wpm,
+      chapterProgress: progress,
+      onContinue: handleContinueBreak
+    }),
+
+    // Controls bar
+    React.createElement('div', { className: 'controls-bar' },
+      React.createElement('div', { className: 'controls-main' },
+        React.createElement('button', {
+          className: 'ctrl-btn', onClick: handleBack, title: 'Назад (←)'
+        }, '⏮'),
+        React.createElement('button', {
+          className: 'ctrl-btn ctrl-btn-play', onClick: togglePlay,
+          title: isPlaying ? 'Пауза (Space)' : 'Играть (Space)'
+        }, isPlaying ? '⏸' : '▶'),
+        React.createElement('button', {
+          className: 'ctrl-btn', onClick: handleForward, title: 'Вперёд (→)'
+        }, '⏭')
+      ),
+      React.createElement('div', { className: 'wpm-display' },
+        React.createElement('button', {
+          className: 'wpm-btn',
+          onClick: () => setWpm(w => { const nw = Math.max(w - 25, 100); if (nw !== w) track('wpm_change', { old_wpm: w, new_wpm: nw, words_read: wordIndex }); return nw; })
+        }, '−25'),
+        React.createElement('span', { className: 'wpm-value' }, wpm + ' WPM'),
+        React.createElement('button', {
+          className: 'wpm-btn',
+          onClick: () => setWpm(w => { const nw = Math.min(w + 25, 800); if (nw !== w) track('wpm_change', { old_wpm: w, new_wpm: nw, words_read: wordIndex }); return nw; })
+        }, '+25')
+      )
+    )
+  );
+}
+
+// ==================== APP ====================
+
+function App() {
+  const [screen, setScreen] = useState('library');
+  const [book, setBook] = useState(null);
+  const [bookKey, setBookKey] = useState('');
+  const [chapterIndex, setChapterIndex] = useState(0);
+  const sessionStartRef = useRef(Date.now());
+
+  // Track session
+  useEffect(() => {
+    getOrCreateUserId();
+    track('session_start');
+    const handleUnload = () => {
+      track('session_end', { total_duration_sec: Math.round((Date.now() - sessionStartRef.current) / 1000) });
+      try {
+        const events = JSON.parse(localStorage.getItem('fr_events') || '[]');
+        localStorage.setItem('fr_events', JSON.stringify(events));
+      } catch(e) {}
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, []);
+
+  const handleBookSelected = useCallback((key, b) => {
+    setBook(b);
+    setBookKey(key);
+    setScreen('toc');
+  }, []);
+
+  const handleSelectChapter = useCallback((idx) => {
+    const pct = book ? getChapterPercent(bookKey, idx, book.chapters[idx].wordCount) : 0;
+    track('chapter_select', { chapter_index: idx, chapter_title: book?.chapters[idx]?.title, had_progress: pct > 0 });
+    setChapterIndex(idx);
+    setScreen('reader');
+  }, [book, bookKey]);
+
+  const handleBackToTOC = useCallback(() => {
+    setScreen('toc');
+  }, []);
+
+  const handleBackToLibrary = useCallback(() => {
+    setBook(null);
+    setBookKey('');
+    setScreen('library');
+  }, []);
+
+  if (screen === 'library' || !book) {
+    return React.createElement(LibraryScreen, { onBookSelected: handleBookSelected });
+  }
+  if (screen === 'toc') {
+    return React.createElement(TOCScreen, {
+      book, bookKey, onSelectChapter: handleSelectChapter, onBackToLibrary: handleBackToLibrary
+    });
+  }
+  return React.createElement(ReaderScreen, {
+    book, bookKey, chapterIndex, onBackToTOC: handleBackToTOC,
+    key: chapterIndex
+  });
+}
+
+ReactDOM.render(React.createElement(App), document.getElementById('root'));
+</script>
+</body>
+</html>
